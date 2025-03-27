@@ -24,3 +24,7 @@ ENV/
 # Local development settings
 .env
 .env.local
+
+# SQLite database files
+*.sqlite3
+

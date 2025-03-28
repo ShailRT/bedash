@@ -116,3 +116,17 @@ def get_users(request):
         users = User.objects.all()
     serializer = UserSerializer(users, many=True)
     return JsonResponse(serializer.data, safe=False)
+
+@api_view(['POST'])
+def delete_todo(request, todo_id):
+    try:
+        todo = Todo.objects.get(id=todo_id)
+        todo.delete()
+        return JsonResponse({'status': 'success', 'message': 'Todo deleted successfully'})
+    except Todo.DoesNotExist:
+        return JsonResponse({'status': 'fail', 'message': 'Todo not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'status': 'fail', 'message': str(e)}, status=400)
+
+
+

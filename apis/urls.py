@@ -11,4 +11,5 @@ urlpatterns = [
     path('employee-todos/<int:employee_id>/', views.get_task_by_employee),
     path('update-todo-status/<int:todo_id>/', views.update_todo_status),
     path('get-users/', views.get_users),
+    path('delete-todo/<int:todo_id>/', views.delete_todo),
 ]

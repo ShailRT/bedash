@@ -9,6 +9,8 @@ class User(AbstractUser):
     )
     user_type = models.CharField(max_length=10, choices=USER_TYPE_CHOICES, default='employee')
     
+    def __str__(self):
+        return self.email
 
 class Todo(models.Model):
     TASK_STATUS_CHOICES = (

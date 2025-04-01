@@ -222,6 +222,11 @@ def update_user_details(request, user_id):
     try:
         print("request", request.data)
         user = User.objects.get(id=user_id)
+        if request.data.get('username') and User.objects.filter(username=request.data.get('username')).exclude(id=user_id).exists():
+            return JsonResponse({'status': 'fail', 'message': 'Username already exists'}, status=400)
+            
+        if request.data.get('email') and User.objects.filter(email=request.data.get('email')).exclude(id=user_id).exists():
+            return JsonResponse({'status': 'fail', 'message': 'Email already exists'}, status=400)
         user.username = request.data.get('username')
         user.email = request.data.get('email')
         user.save()
@@ -240,7 +245,10 @@ def change_user_password(request, user_id):
         new_password = request.data.get('newPassword')
         
         # Verify current password
+        print("current_password", current_password)
+        print("user.check_password", user.check_password(current_password))
         if not user.check_password(current_password):
+            print("current password is incorrect")
             return JsonResponse({
                 'status': 'fail',
                 'message': 'Current password is incorrect'

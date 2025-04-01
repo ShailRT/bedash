@@ -7,8 +7,10 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.contrib.auth import get_user_model
 from .serializers import UserSerializer
-from .models import Todo
+from .models import Todo, Team
 from .serializers import TodoSerializer
+from .serializers import TeamSerializer
+import json
 User = get_user_model()
 
 @csrf_exempt
@@ -53,14 +55,18 @@ def list_users(request):
 @api_view(['POST'])
 def create_todo(request):
     try:
+        print("request", request.data)
         task = request.data.get('task')
         employee = request.data.get('employee')
+        manager = request.data.get('manager')
         
         if not task or not employee:
             return JsonResponse({'status': 'fail', 'message': 'Missing fields'}, status=400)
         
         employee = User.objects.get(id=int(employee))
-        todo = Todo.objects.create(task=task, user_assigned_to=employee)
+        manager = User.objects.get(id=int(manager))
+
+        todo = Todo.objects.create(task=task, user_assigned_to=employee, user_assigned_by=manager)
         serializer = TodoSerializer(todo)
         return JsonResponse({'status': 'success', 'todo': serializer.data})
     except:
@@ -127,6 +133,220 @@ def delete_todo(request, todo_id):
         return JsonResponse({'status': 'fail', 'message': 'Todo not found'}, status=404)
     except Exception as e:
         return JsonResponse({'status': 'fail', 'message': str(e)}, status=400)
+
+@api_view(['GET'])
+def view_profile(request, user_id):
+    try:
+        user = User.objects.get(id=user_id)
+        serializer = UserSerializer(user, many=False)
+        return JsonResponse(serializer.data)
+    except Exception as e:
+        return JsonResponse({'status': 'fail', 'message': e})
+
+@api_view(['POST'])
+def create_team(request):
+    try:
+        manager_ids = request.data.get('manager', [])
+        member_ids = request.data.get('employees', [])
+        
+        if not manager_ids or not member_ids:
+            return JsonResponse({'status': 'fail', 'message': 'Missing manager or member IDs'}, status=400)
+        
+        # Convert string IDs to integers if they're coming as strings
+        manager_ids = [int(id) for id in manager_ids]
+        member_ids = [int(id) for id in member_ids]
+        
+        # Get managers and members using id__in
+        managers = User.objects.filter(id__in=manager_ids)
+        members = User.objects.filter(id__in=member_ids)
+        print("managers", managers)
+        print("members", members)
+        
+        # Create team and add relationships
+        team = Team.objects.create()
+        team.managers.set(managers)
+        team.members.set(members)
+        
+        serializer = TeamSerializer(team)
+        return JsonResponse({'status': 'success', 'team': serializer.data})
+    except ValueError:
+        return JsonResponse({'status': 'fail', 'message': 'Invalid ID format'}, status=400)
+    except Exception as e:
+        return JsonResponse({'status': 'fail', 'message': str(e)}, status=400)
+
+@api_view(['GET'])
+def get_managers(request):
+    managers = User.objects.filter(user_type='manager')
+    serializer = UserSerializer(managers, many=True)
+    return JsonResponse(serializer.data, safe=False)
+
+@api_view(['GET'])
+def get_teams(request):
+    teams = Team.objects.all()
+    serializer = TeamSerializer(teams, many=True)
+    print("teams", serializer.data)
+    return JsonResponse(serializer.data, safe=False)
+
+@api_view(['GET'])
+def get_team_by_manager(request, manager_id):
+    try:
+        team = Team.objects.get(managers__in=[int(manager_id)])
+        serializer = TeamSerializer(team)
+        return JsonResponse(serializer.data, safe=False)
+    except Team.DoesNotExist:
+        return JsonResponse({'status': 'fail', 'message': 'Team not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'status': 'fail', 'message': str(e)}, status=400)
+
+@api_view(['GET'])
+def get_team_task(request, team_id):
+    team = Team.objects.get(id=team_id)
+    tasks = Todo.objects.filter(user_assigned_to__in=team.members.all())
+    serializer = TodoSerializer(tasks, many=True)
+    return JsonResponse(serializer.data, safe=False)
+
+@api_view(['POST'])
+def update_user_role(request, user_id):
+    try:
+        user = User.objects.get(id=user_id)
+        user.user_type = request.data.get('user_type')
+        user.save()
+        return JsonResponse({'status': 'success', 'message': 'User role updated successfully'})
+    except User.DoesNotExist:
+        return JsonResponse({'status': 'fail', 'message': 'User not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'status': 'fail', 'message': str(e)}, status=400)
+
+@api_view(['POST'])
+def update_user_details(request, user_id):
+    try:
+        print("request", request.data)
+        user = User.objects.get(id=user_id)
+        user.username = request.data.get('username')
+        user.email = request.data.get('email')
+        user.save()
+        serializer = UserSerializer(user)
+        return JsonResponse({'status': 'success', 'user': serializer.data})
+    except User.DoesNotExist:
+        return JsonResponse({'status': 'fail', 'message': 'User not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'status': 'fail', 'message': str(e)}, status=400)
+
+@api_view(['POST'])
+def change_user_password(request, user_id):
+    try:
+        user = User.objects.get(id=user_id)
+        current_password = request.data.get('currentPassword')
+        new_password = request.data.get('newPassword')
+        
+        # Verify current password
+        if not user.check_password(current_password):
+            return JsonResponse({
+                'status': 'fail',
+                'message': 'Current password is incorrect'
+            }, status=400)
+        
+        # Set new password
+        user.set_password(new_password)
+        user.save()
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Password updated successfully'
+        })
+        
+    except User.DoesNotExist:
+        return JsonResponse({
+            'status': 'fail',
+            'message': 'User not found'
+        }, status=404)
+    except Exception as e:
+        return JsonResponse({
+            'status': 'fail',
+            'message': str(e)
+        }, status=400)
+
+@api_view(['POST'])
+def delete_user(request, user_id):
+    try:
+        user = User.objects.get(id=user_id)
+        user.delete()
+        return JsonResponse({
+            'status': 'success',
+            'message': 'User deleted successfully'
+        })
+    except User.DoesNotExist:
+        return JsonResponse({
+            'status': 'fail',
+            'message': 'User not found'
+        }, status=404)
+    except Exception as e:
+        return JsonResponse({
+            'status': 'fail',
+            'message': str(e)
+        }, status=400)
+    
+@api_view(['POST'])
+def delete_team(request, team_id):
+    try:
+        team = Team.objects.get(id=team_id)
+        team.delete()
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Team deleted successfully'
+        })
+    except Team.DoesNotExist:
+        return JsonResponse({
+            'status': 'fail',
+            'message': 'Team not found'
+        }, status=404)
+    except Exception as e:
+        return JsonResponse({
+            'status': 'fail',
+            'message': str(e)
+        }, status=400)
+
+@api_view(['POST'])
+def edit_team_members(request, team_id):
+    try:
+        team = Team.objects.get(id=team_id)
+        member_ids = request.data.get('employees', [])
+        manager_ids = request.data.get('manager', [])
+        print("request.data", request.data)
+        # Update team members
+        if member_ids:
+            members = User.objects.filter(id__in=member_ids)
+            team.members.clear()  # Clear existing members
+            for member in members:
+                team.members.add(member)
+        
+        # Update team managers
+        if manager_ids:
+            managers = User.objects.filter(id__in=manager_ids)
+            team.managers.clear()  # Clear existing managers
+            for manager in managers:
+                team.managers.add(manager)
+        
+        team.save()
+        serializer = TeamSerializer(team)
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Team members updated successfully',
+            'team': serializer.data
+        })
+    except Team.DoesNotExist:
+        return JsonResponse({
+            'status': 'fail',
+            'message': 'Team not found'
+        }, status=404)
+    except Exception as e:
+        return JsonResponse({
+            'status': 'fail',
+            'message': str(e)
+        }, status=400)
+
+
+
 
 
 

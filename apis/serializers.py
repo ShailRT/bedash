@@ -6,7 +6,7 @@ User = get_user_model()
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = '__all__'
+        fields = ['id', 'username', 'user_type', 'date_joined', 'email', 'first_name', 'last_name']
 
 class TodoSerializer(serializers.ModelSerializer):
     class Meta:

@@ -22,7 +22,7 @@ def login_user(request):
     print("user", user, username, password)
     if user is not None:
         login(request, user)
-        serializer = UserSerializer(user)
+        serializer = UserSerializer(user, many=False)
         return JsonResponse({'status': 'success', 'user': serializer.data})
     else:
         return JsonResponse({'status': 'fail', 'message': 'Invalid credentials'}, status=400)
